@@ -74,10 +74,25 @@ EOF
 }
 
 gen_proxy_file_for_user() {
-    cat >proxy.txt <<EOF
-$(awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2 }' ${WORKDATA})
-EOF
+    # Kiểm tra xem WORKDATA có tồn tại không
+    if [ ! -f "${WORKDATA}" ]; then
+        echo "Không tìm thấy tệp dữ liệu: ${WORKDATA}. Vui lòng kiểm tra lại!"
+        exit 1
+    fi
+
+    # Tạo tệp proxy.txt
+    echo "Đang tạo file proxy.txt..."
+    awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2}' "${WORKDATA}" > proxy.txt
+
+    # Kiểm tra xem file proxy.txt đã được tạo thành công hay chưa
+    if [ -f "proxy.txt" ]; then
+        echo "Tạo file proxy hoàn tất tại proxy.txt"
+    else
+        echo "Không thể tạo file proxy.txt. Vui lòng kiểm tra lại!"
+        exit 1
+    fi
 }
+
 
 gen_data() {
     seq $FIRST_PORT $LAST_PORT | while read port; do
@@ -118,10 +133,18 @@ create_new_config() {
 
     # Kiểm tra và xóa dữ liệu cũ nếu tồn tại
     echo "Kiểm tra dữ liệu cũ..."
-    [ -f "$WORKDATA" ] && rm -f "$WORKDATA" && echo "Đã xóa dữ liệu cũ."
-    [ -f "${WORKDIR}/boot_iptables.sh" ] && rm -f "${WORKDIR}/boot_iptables.sh" && echo "Đã xóa script iptables cũ."
-    [ -f "${WORKDIR}/boot_ifconfig.sh" ] && rm -f "${WORKDIR}/boot_ifconfig.sh" && echo "Đã xóa script cấu hình IPv6 cũ."
-
+    # Xóa dữ liệu cũ
+    if [ -f "$WORKDATA" ]; then
+        rm -f "$WORKDATA" && echo "Đã xóa dữ liệu cũ: $WORKDATA." || echo "Không thể xóa dữ liệu cũ: $WORKDATA. Vui lòng kiểm tra quyền."
+    fi
+    
+    if [ -f "${WORKDIR}/boot_iptables.sh" ]; then
+        rm -f "${WORKDIR}/boot_iptables.sh" && echo "Đã xóa script iptables cũ." || echo "Không thể xóa script iptables cũ. Vui lòng kiểm tra quyền."
+    fi
+    
+    if [ -f "${WORKDIR}/boot_ifconfig.sh" ]; then
+        rm -f "${WORKDIR}/boot_ifconfig.sh" && echo "Đã xóa script cấu hình IPv6 cũ." || echo "Không thể xóa script cấu hình IPv6 cũ. Vui lòng kiểm tra quyền."
+    fi
     # Tạo dữ liệu proxy
     echo "Đang tạo dữ liệu proxy..."
     gen_data >"$WORKDATA"
@@ -216,14 +239,61 @@ view_proxy_list() {
 }
 
 stop_proxy() {
-    echo "Đang tắt proxy..."
-    service 3proxy stop && echo "Proxy đã tắt." || echo "Không thể tắt proxy hoặc proxy chưa chạy."
+    echo "Đang tắt tất cả dịch vụ liên quan đến 3proxy..."
+
+    # Dừng dịch vụ thông qua systemctl nếu có
+    if systemctl list-units --type=service | grep -q "3proxy"; then
+        systemctl stop 3proxy && echo "Dịch vụ 3proxy đã dừng thông qua systemctl." || echo "Không thể dừng dịch vụ 3proxy thông qua systemctl."
+    else
+        echo "Không tìm thấy dịch vụ 3proxy trong systemctl."
+    fi
+
+    # Dừng dịch vụ thông qua service nếu có
+    if service --status-all 2>/dev/null | grep -q "3proxy"; then
+        service 3proxy stop && echo "Dịch vụ 3proxy đã dừng thông qua service." || echo "Không thể dừng dịch vụ 3proxy thông qua service."
+    fi
+
+    # Kiểm tra và kết thúc tiến trình 3proxy đang chạy
+    PIDS=$(pgrep 3proxy)
+    if [ -n "$PIDS" ]; then
+        echo "Đang kết thúc các tiến trình 3proxy..."
+        kill -9 $PIDS && echo "Tất cả tiến trình 3proxy đã dừng." || echo "Không thể kết thúc một số tiến trình 3proxy."
+    else
+        echo "Không tìm thấy tiến trình 3proxy đang chạy."
+    fi
+
+    echo "Đã hoàn tất việc dừng tất cả dịch vụ liên quan đến 3proxy."
 }
+
 
 start_proxy() {
     echo "Đang khởi động proxy..."
-    service 3proxy start && echo "Proxy đã khởi động." || echo "Không thể khởi động proxy."
+
+    # Khởi động dịch vụ 3proxy bằng systemctl nếu có
+    if systemctl list-units --type=service | grep -q "3proxy"; then
+        systemctl start 3proxy && echo "Dịch vụ 3proxy đã được khởi động qua systemctl." || echo "Không thể khởi động dịch vụ 3proxy qua systemctl."
+    else
+        echo "Không tìm thấy dịch vụ 3proxy trong systemctl. Đang thử với service..."
+    fi
+
+    # Khởi động dịch vụ 3proxy bằng service nếu có
+    if service --status-all 2>/dev/null | grep -q "3proxy"; then
+        service 3proxy start && echo "Dịch vụ 3proxy đã được khởi động qua service." || echo "Không thể khởi động dịch vụ 3proxy qua service."
+    else
+        echo "Không tìm thấy dịch vụ 3proxy trong service. Đang kiểm tra tiến trình 3proxy..."
+    fi
+
+    # Kiểm tra tiến trình 3proxy có đang chạy hay không
+    if pgrep 3proxy > /dev/null; then
+        echo "3proxy đang chạy thành công."
+    else
+        echo "Không tìm thấy tiến trình 3proxy. Vui lòng kiểm tra cấu hình."
+        exit 1
+    fi
+
+    echo "Quá trình khởi động proxy hoàn tất."
 }
+
 
 menu() {
     while true; do
