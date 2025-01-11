@@ -103,6 +103,7 @@ create_new_config() {
     WORKDATA="${WORKDIR}/data.txt"
     mkdir -p "$WORKDIR" && cd "$WORKDIR" || { echo "Không thể tạo hoặc chuyển đến thư mục làm việc!"; exit 1; }
 
+    # Lấy IP4 và subnet IP6
     IP4=$(curl -4 -s icanhazip.com)
     IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
@@ -115,40 +116,61 @@ create_new_config() {
     FIRST_PORT=10000
     LAST_PORT=$(($FIRST_PORT + $COUNT))
 
+    # Kiểm tra và xóa dữ liệu cũ nếu tồn tại
+    echo "Kiểm tra dữ liệu cũ..."
+    [ -f "$WORKDATA" ] && rm -f "$WORKDATA" && echo "Đã xóa dữ liệu cũ."
+    [ -f "${WORKDIR}/boot_iptables.sh" ] && rm -f "${WORKDIR}/boot_iptables.sh" && echo "Đã xóa script iptables cũ."
+    [ -f "${WORKDIR}/boot_ifconfig.sh" ] && rm -f "${WORKDIR}/boot_ifconfig.sh" && echo "Đã xóa script cấu hình IPv6 cũ."
+
+    # Tạo dữ liệu proxy
     echo "Đang tạo dữ liệu proxy..."
-    gen_data >"$WORKDIR/data.txt"
+    gen_data >"$WORKDATA"
     echo "Tạo dữ liệu proxy hoàn tất."
 
+    # Tạo script iptables
     echo "Tạo script iptables..."
-    gen_iptables >"$WORKDIR/boot_iptables.sh"
+    gen_iptables >"${WORKDIR}/boot_iptables.sh"
     echo "Tạo script iptables hoàn tất."
 
+    # Tạo script cấu hình IPv6
     echo "Tạo script cấu hình mạng IPv6..."
-    gen_ifconfig >"$WORKDIR/boot_ifconfig.sh"
+    gen_ifconfig >"${WORKDIR}/boot_ifconfig.sh"
     echo "Tạo script cấu hình IPv6 hoàn tất."
 
     chmod +x ${WORKDIR}/boot_*.sh /etc/rc.local
 
-    echo "Tạo file cấu hình 3proxy..."
+    # Tạo file cấu hình 3proxy
+    echo "Kiểm tra và tạo lại file cấu hình 3proxy..."
+    [ -f "/usr/local/etc/3proxy/3proxy.cfg" ] && rm -f "/usr/local/etc/3proxy/3proxy.cfg"
     gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
     echo "Tạo file cấu hình 3proxy hoàn tất."
 
+    # Kiểm tra và thêm vào /etc/rc.local nếu chưa có
     echo "Cập nhật /etc/rc.local để tự động khởi động proxy..."
-    cat >>/etc/rc.local <<EOF
+    if ! grep -q "${WORKDIR}/boot_iptables.sh" /etc/rc.local; then
+        cat >>/etc/rc.local <<EOF
 bash ${WORKDIR}/boot_iptables.sh
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 10048
 service 3proxy start
 EOF
+        echo "Đã cập nhật /etc/rc.local."
+    else
+        echo "Các lệnh đã tồn tại trong /etc/rc.local. Không cần cập nhật."
+    fi
 
+    # Khởi chạy /etc/rc.local
     echo "Khởi chạy /etc/rc.local để áp dụng cấu hình ngay..."
     bash /etc/rc.local
 
+    # Tạo file proxy cho người dùng
     echo "Tạo file proxy cho người dùng..."
     gen_proxy_file_for_user
     echo "Tạo file proxy hoàn tất tại proxy.txt"
 
     echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
+}
+
 }
 
 setup_proxy() {
