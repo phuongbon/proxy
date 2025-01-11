@@ -170,8 +170,6 @@ EOF
 
     echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
 }
-
-
 setup_proxy() {
     echo "Tiến hành cập nhật VPS..."
     (yum update -y) & spinner $!
