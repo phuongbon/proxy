@@ -12,7 +12,6 @@ gen64() {
     echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
 }
 
-# Hàm hiển thị spinner
 spinner() {
     local pid=$1
     local delay=0.1
@@ -84,7 +83,7 @@ gen_data() {
 
 gen_iptables() {
     cat <<EOF
-$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA}) 
+$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA})
 EOF
 }
 
@@ -94,14 +93,7 @@ $(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
 
-setup_proxy() {
-    echo "Bắt đầu cài đặt các gói cần thiết..."
-    (yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null) & spinner $!
-    echo "Cài đặt các gói cần thiết hoàn tất."
-
-    echo "installing 3proxy"
-    install_3proxy
-
+create_new_config() {
     echo "Tạo thư mục làm việc tại /home/proxy-installer"
     WORKDIR="/home/proxy-installer"
     WORKDATA="${WORKDIR}/data.txt"
@@ -155,10 +147,22 @@ EOF
     echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
 }
 
+setup_proxy() {
+    echo "Bắt đầu cài đặt các gói cần thiết..."
+    (yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null) & spinner $!
+    echo "Cài đặt các gói cần thiết hoàn tất."
+
+    echo "installing 3proxy"
+    install_3proxy
+
+    create_new_config
+}
+
 refresh_proxy() {
     echo "Làm mới proxy..."
     WORKDIR="/home/proxy-installer"
     WORKDATA="${WORKDIR}/data.txt"
+
     stop_proxy
 
     # Xóa các địa chỉ IPv6 đã gán
@@ -172,8 +176,8 @@ refresh_proxy() {
     rm -rf "$WORKDIR"
     rm -f /usr/local/etc/3proxy/3proxy.cfg
 
-    # Thiết lập proxy mới
-    setup_proxy
+    # Thiết lập cấu hình proxy mới và khởi động lại proxy
+    create_new_config
 }
 
 view_proxy_list() {
@@ -224,6 +228,19 @@ menu() {
     done
 }
 
-# Sau khi cài đặt xong hoàn toàn, tự động hiển thị menu
-setup_proxy
-menu
+# Kiểm tra đối số dòng lệnh để hiển thị menu mà không cài đặt lại
+if [ "$1" = "menu" ] || [ "$1" = "star" ]; then
+    menu
+else
+    setup_proxy
+
+    # Tự động thêm alias 'menu' vào ~/.bashrc nếu chưa tồn tại
+    script_full_path=$(realpath "$0")
+    alias_line="alias menu='sudo $script_full_path menu'"
+    if ! grep -qxF "$alias_line" ~/.bashrc; then
+        echo "$alias_line" >> ~/.bashrc
+        echo "Alias 'menu' đã được thêm vào ~/.bashrc. Vui lòng chạy 'source ~/.bashrc' hoặc mở terminal mới để sử dụng."
+    fi
+
+    menu
+fi
