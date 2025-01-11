@@ -242,13 +242,12 @@ else
     setup_proxy
 
     # Xác định thư mục gốc của script hiện tại
-    INSTALL_DIR=$(dirname "$(realpath "$0")")
     SCRIPT_SRC="/root/caidat.sh"
     SCRIPT_DEST="/usr/local/bin/caidat.sh"
 
     # Kiểm tra xem file caidat.sh có tồn tại trong thư mục gốc cài đặt không
     if [ ! -f "$SCRIPT_SRC" ]; then
-        echo "File 'caidat.sh' không tồn tại trong thư mục cài đặt: $INSTALL_DIR"
+        echo "File 'caidat.sh' không tồn tại trong thư mục cài đặt"
         exit 1
     fi
 
