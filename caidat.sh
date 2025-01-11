@@ -152,6 +152,9 @@ EOF
 }
 
 setup_proxy() {
+    echo "Tiến hành cập nhật VPS..."
+    (yum update -y) & spinner $!
+    echo "Cập nhật hoàn tất."
     echo "Bắt đầu cài đặt các gói cần thiết..."
     (yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null) & spinner $!
     echo "Cài đặt các gói cần thiết hoàn tất."
