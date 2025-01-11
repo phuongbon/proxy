@@ -234,9 +234,8 @@ if [ "$1" = "menu" ] || [ "$1" = "star" ]; then
 else
     setup_proxy
 
-    # Tự động thêm alias 'menu' vào ~/.bashrc nếu chưa tồn tại
-    script_full_path=$(realpath "$0")
-    alias_line="alias menu='bash $script_full_path menu'"
+    # Tự động thêm alias 'menu' vào ~/.bashrc nếu chưa tồn tại, sử dụng đường dẫn tĩnh
+    alias_line="alias menu='bash /usr/local/bin/caidat.sh menu'"
     if ! grep -qxF "$alias_line" "$HOME/.bashrc"; then
         echo "$alias_line" >> "$HOME/.bashrc"
         echo "Alias 'menu' đã được thêm vào ~/.bashrc. Vui lòng chạy 'source ~/.bashrc' hoặc mở terminal mới để sử dụng."
