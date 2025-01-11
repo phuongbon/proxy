@@ -155,6 +155,27 @@ EOF
     echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
 }
 
+refresh_proxy() {
+    echo "Làm mới proxy..."
+    WORKDIR="/home/proxy-installer"
+    WORKDATA="${WORKDIR}/data.txt"
+    stop_proxy
+
+    # Xóa các địa chỉ IPv6 đã gán
+    if [ -f "$WORKDATA" ]; then
+        awk -F "/" '{print $5}' "$WORKDATA" | while read ip6; do
+            ifconfig eth0 inet6 del "$ip6/64" 2>/dev/null
+        done
+    fi
+
+    # Xóa dữ liệu và cấu hình cũ
+    rm -rf "$WORKDIR"
+    rm -f /usr/local/etc/3proxy/3proxy.cfg
+
+    # Thiết lập proxy mới
+    setup_proxy
+}
+
 view_proxy_list() {
     if [ -f proxy.txt ]; then
         echo "Danh sách proxy:"
@@ -187,25 +208,12 @@ menu() {
         echo -n "Chọn một tùy chọn: "
         read choice
         case $choice in
-            1)
-                view_proxy_list
-                ;;
-            2)
-                setup_proxy
-                ;;
-            3)
-                stop_proxy
-                ;;
-            4)
-                start_proxy
-                ;;
-            0)
-                echo "Thoát menu."
-                break
-                ;;
-            *)
-                echo "Lựa chọn không hợp lệ, vui lòng thử lại."
-                ;;
+            1) view_proxy_list ;;
+            2) refresh_proxy ;;
+            3) stop_proxy ;;
+            4) start_proxy ;;
+            0) echo "Thoát menu."; break ;;
+            *) echo "Lựa chọn không hợp lệ, vui lòng thử lại." ;;
         esac
         echo ""
         echo "Nhập 'proxy' để trở về menu chính hoặc '0' để thoát."
@@ -216,5 +224,6 @@ menu() {
     done
 }
 
-# Bắt đầu thực thi menu
+# Sau khi cài đặt xong hoàn toàn, tự động hiển thị menu
+setup_proxy
 menu
