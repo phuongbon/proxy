@@ -216,6 +216,7 @@ menu() {
         echo "4. Khởi động proxy"
         echo "0. Thoát"
         echo "======================="
+        echo "======================="
         echo -n "Chọn một tùy chọn: "
         read choice
         case $choice in
