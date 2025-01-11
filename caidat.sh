@@ -241,9 +241,19 @@ if [ "$1" = "menu" ] || [ "$1" = "star" ]; then
 else
     setup_proxy
 
-    # Sao chép script đến vị trí cố định và thiết lập quyền thực thi
+    # Xác định thư mục gốc của script hiện tại
+    INSTALL_DIR=$(dirname "$(realpath "$0")")
+    SCRIPT_SRC="$INSTALL_DIR/caidat.sh"
     SCRIPT_DEST="/usr/local/bin/caidat.sh"
-    sudo install -m 755 "$(realpath "$0")" "$SCRIPT_DEST"
+
+    # Kiểm tra xem file caidat.sh có tồn tại trong thư mục gốc cài đặt không
+    if [ ! -f "$SCRIPT_SRC" ]; then
+        echo "File 'caidat.sh' không tồn tại trong thư mục cài đặt: $INSTALL_DIR"
+        exit 1
+    fi
+
+    # Sao chép script đến vị trí cố định và thiết lập quyền thực thi
+    sudo install -m 755 "$SCRIPT_SRC" "$SCRIPT_DEST"
 
     # Tự động thêm alias 'menu' vào ~/.bashrc nếu chưa tồn tại, sử dụng đường dẫn tĩnh
     alias_line="alias menu='bash $SCRIPT_DEST menu'"
