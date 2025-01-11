@@ -232,7 +232,6 @@ menu() {
     done
 }
 
-# Kiểm tra đối số dòng lệnh để hiển thị menu mà không cài đặt lại
 if [ "$1" = "menu" ] || [ "$1" = "star" ]; then
     menu
 else
@@ -240,8 +239,7 @@ else
 
     # Sao chép script đến vị trí cố định và thiết lập quyền thực thi
     SCRIPT_DEST="/usr/local/bin/caidat.sh"
-    sudo cp "$(realpath "$0")" "$SCRIPT_DEST"
-    sudo chmod +x "$SCRIPT_DEST"
+    sudo install -m 755 "$(realpath "$0")" "$SCRIPT_DEST"
 
     # Tự động thêm alias 'menu' vào ~/.bashrc nếu chưa tồn tại, sử dụng đường dẫn tĩnh
     alias_line="alias menu='bash $SCRIPT_DEST menu'"
@@ -252,4 +250,3 @@ else
 
     menu
 fi
-
