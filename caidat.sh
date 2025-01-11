@@ -12,12 +12,35 @@ gen64() {
     echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
 }
 
+# Hàm hiển thị spinner
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "    \b\b\b\b"
+}
+
 install_3proxy() {
     echo "Bắt đầu cài đặt 3proxy..."
     URL="https://raw.githubusercontent.com/quayvlog/quayvlog/main/3proxy-3proxy-0.8.6.tar.gz"
-    wget -qO- $URL | bsdtar -xvf- || { echo "Tải về hoặc giải nén 3proxy thất bại!"; exit 1; }
+    (wget -qO- $URL | bsdtar -xvf-) & spinner $!
+    if [ $? -ne 0 ]; then
+        echo "Tải về hoặc giải nén 3proxy thất bại!"
+        exit 1
+    fi
     cd 3proxy-3proxy-0.8.6 || { echo "Không tìm thấy thư mục 3proxy sau giải nén!"; exit 1; }
-    make -f Makefile.Linux || { echo "Biên dịch 3proxy thất bại!"; exit 1; }
+    (make -f Makefile.Linux) & spinner $!
+    if [ $? -ne 0 ]; then
+        echo "Biên dịch 3proxy thất bại!"
+        exit 1
+    fi
     mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
     cp src/3proxy /usr/local/etc/3proxy/bin/ || { echo "Sao chép 3proxy thất bại!"; exit 1; }
     cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy || { echo "Sao chép script khởi động thất bại!"; exit 1; }
@@ -71,61 +94,127 @@ $(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
 
-echo "Bắt đầu cài đặt các gói cần thiết..."
-yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null
-echo "Cài đặt các gói cần thiết hoàn tất."
+setup_proxy() {
+    echo "Bắt đầu cài đặt các gói cần thiết..."
+    (yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null) & spinner $!
+    echo "Cài đặt các gói cần thiết hoàn tất."
 
-echo "installing 3proxy"
-install_3proxy
+    echo "installing 3proxy"
+    install_3proxy
 
-echo "Tạo thư mục làm việc tại /home/proxy-installer"
-WORKDIR="/home/proxy-installer"
-WORKDATA="${WORKDIR}/data.txt"
-mkdir -p "$WORKDIR" && cd "$WORKDIR" || { echo "Không thể tạo hoặc chuyển đến thư mục làm việc!"; exit 1; }
+    echo "Tạo thư mục làm việc tại /home/proxy-installer"
+    WORKDIR="/home/proxy-installer"
+    WORKDATA="${WORKDIR}/data.txt"
+    mkdir -p "$WORKDIR" && cd "$WORKDIR" || { echo "Không thể tạo hoặc chuyển đến thư mục làm việc!"; exit 1; }
 
-IP4=$(curl -4 -s icanhazip.com)
-IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+    IP4=$(curl -4 -s icanhazip.com)
+    IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
-echo "Địa chỉ IP4 nội bộ: ${IP4}"
-echo "Địa chỉ subnet IP6: ${IP6}"
+    echo "Địa chỉ IP4 nội bộ: ${IP4}"
+    echo "Địa chỉ subnet IP6: ${IP6}"
 
-echo "Bạn muốn tạo bao nhiêu proxy? Ví dụ: 500"
-read COUNT
+    echo "Bạn muốn tạo bao nhiêu proxy? Ví dụ: 500"
+    read COUNT
 
-FIRST_PORT=10000
-LAST_PORT=$(($FIRST_PORT + $COUNT))
+    FIRST_PORT=10000
+    LAST_PORT=$(($FIRST_PORT + $COUNT))
 
-echo "Đang tạo dữ liệu proxy..."
-gen_data >"$WORKDIR/data.txt"
-echo "Tạo dữ liệu proxy hoàn tất."
+    echo "Đang tạo dữ liệu proxy..."
+    gen_data >"$WORKDIR/data.txt"
+    echo "Tạo dữ liệu proxy hoàn tất."
 
-echo "Tạo script iptables..."
-gen_iptables >"$WORKDIR/boot_iptables.sh"
-echo "Tạo script iptables hoàn tất."
+    echo "Tạo script iptables..."
+    gen_iptables >"$WORKDIR/boot_iptables.sh"
+    echo "Tạo script iptables hoàn tất."
 
-echo "Tạo script cấu hình mạng IPv6..."
-gen_ifconfig >"$WORKDIR/boot_ifconfig.sh"
-echo "Tạo script cấu hình IPv6 hoàn tất."
+    echo "Tạo script cấu hình mạng IPv6..."
+    gen_ifconfig >"$WORKDIR/boot_ifconfig.sh"
+    echo "Tạo script cấu hình IPv6 hoàn tất."
 
-chmod +x ${WORKDIR}/boot_*.sh /etc/rc.local
+    chmod +x ${WORKDIR}/boot_*.sh /etc/rc.local
 
-echo "Tạo file cấu hình 3proxy..."
-gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
-echo "Tạo file cấu hình 3proxy hoàn tất."
+    echo "Tạo file cấu hình 3proxy..."
+    gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
+    echo "Tạo file cấu hình 3proxy hoàn tất."
 
-echo "Cập nhật /etc/rc.local để tự động khởi động proxy..."
-cat >>/etc/rc.local <<EOF
+    echo "Cập nhật /etc/rc.local để tự động khởi động proxy..."
+    cat >>/etc/rc.local <<EOF
 bash ${WORKDIR}/boot_iptables.sh
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 10048
 service 3proxy start
 EOF
 
-echo "Khởi chạy /etc/rc.local để áp dụng cấu hình ngay..."
-bash /etc/rc.local
+    echo "Khởi chạy /etc/rc.local để áp dụng cấu hình ngay..."
+    bash /etc/rc.local
 
-echo "Tạo file proxy cho người dùng..."
-gen_proxy_file_for_user
-echo "Tạo file proxy hoàn tất tại proxy.txt"
+    echo "Tạo file proxy cho người dùng..."
+    gen_proxy_file_for_user
+    echo "Tạo file proxy hoàn tất tại proxy.txt"
 
-echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
+    echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
+}
+
+view_proxy_list() {
+    if [ -f proxy.txt ]; then
+        echo "Danh sách proxy:"
+        cat proxy.txt
+    else
+        echo "Chưa có file proxy.txt. Vui lòng tạo proxy trước."
+    fi
+}
+
+stop_proxy() {
+    echo "Đang tắt proxy..."
+    service 3proxy stop && echo "Proxy đã tắt." || echo "Không thể tắt proxy hoặc proxy chưa chạy."
+}
+
+start_proxy() {
+    echo "Đang khởi động proxy..."
+    service 3proxy start && echo "Proxy đã khởi động." || echo "Không thể khởi động proxy."
+}
+
+menu() {
+    while true; do
+        echo ""
+        echo "======== MENU ========="
+        echo "1. Xem danh sách proxy đã tạo"
+        echo "2. Làm mới tất cả proxy"
+        echo "3. Tắt proxy"
+        echo "4. Khởi động proxy"
+        echo "0. Thoát"
+        echo "======================="
+        echo -n "Chọn một tùy chọn: "
+        read choice
+        case $choice in
+            1)
+                view_proxy_list
+                ;;
+            2)
+                setup_proxy
+                ;;
+            3)
+                stop_proxy
+                ;;
+            4)
+                start_proxy
+                ;;
+            0)
+                echo "Thoát menu."
+                break
+                ;;
+            *)
+                echo "Lựa chọn không hợp lệ, vui lòng thử lại."
+                ;;
+        esac
+        echo ""
+        echo "Nhập 'proxy' để trở về menu chính hoặc '0' để thoát."
+        read next_action
+        if [ "$next_action" = "0" ]; then
+            break
+        fi
+    done
+}
+
+# Bắt đầu thực thi menu
+menu
