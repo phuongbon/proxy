@@ -243,7 +243,7 @@ else
 
     # Xác định thư mục gốc của script hiện tại
     INSTALL_DIR=$(dirname "$(realpath "$0")")
-    SCRIPT_SRC="$INSTALL_DIR/caidat.sh"
+    SCRIPT_SRC="/root/caidat.sh"
     SCRIPT_DEST="/usr/local/bin/caidat.sh"
 
     # Kiểm tra xem file caidat.sh có tồn tại trong thư mục gốc cài đặt không
