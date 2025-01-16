@@ -1,4 +1,7 @@
 #!/bin/bash
+# Script cài đặt và cấu hình 3proxy
+# Yêu cầu: Chạy với quyền root
+
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -40,21 +43,37 @@ install_3proxy() {
     echo "Bắt đầu cài đặt 3proxy..."
     local URL="https://raw.githubusercontent.com/quayvlog/quayvlog/main/3proxy-3proxy-0.8.6.tar.gz"
 
+    # Tải xuống và giải nén 3proxy
     wget -qO- "$URL" | bsdtar -xvf- &
     spinner $!
 
+    # Kiểm tra xem thư mục 3proxy đã được giải nén chưa
+    if [ ! -d "3proxy-3proxy-0.8.6" ]; then
+        echo "Không thể giải nén 3proxy. Kiểm tra lại URL hoặc kết nối mạng."
+        exit 1
+    fi
+
     cd 3proxy-3proxy-0.8.6
 
+    # Biên dịch 3proxy
     make -f Makefile.Linux &
     spinner $!
 
+    # Tạo các thư mục cấu hình và sao chép binary
     mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
     cp src/3proxy /usr/local/etc/3proxy/bin/
     cp scripts/rc.d/proxy.sh /etc/init.d/3proxy
+
+    # Thiết lập quyền thực thi cho script khởi động
     chmod +x /etc/init.d/3proxy
+
+    # Thêm dịch vụ vào các dịch vụ khởi động cùng hệ thống
+    chkconfig --add 3proxy
     chkconfig 3proxy on
 
+    # Quay lại thư mục làm việc chính
     cd "$WORKDIR"
+
     echo "Cài đặt 3proxy hoàn tất."
 }
 
@@ -98,7 +117,7 @@ gen_proxy_file_for_user() {
 # Hàm tạo dữ liệu proxy
 gen_data() {
     for port in $(seq "$FIRST_PORT" "$LAST_PORT"); do
-        echo "phuong$(random)/phuongphuong$(random)/$IP4/$port/$(gen64 $IP6)"
+        echo "phuong$(random)/phuongphuong$(random)/$IP4/$port/$(gen64)"
     done
 }
 
