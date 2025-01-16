@@ -71,8 +71,8 @@ install_3proxy() {
     chkconfig --add 3proxy
     chkconfig 3proxy on
 
-    # Quay lại thư mục làm việc chính
-    cd "$WORKDIR"
+    # Quay lại thư mục ban đầu
+    cd - >/dev/null
 
     echo "Cài đặt 3proxy hoàn tất."
 }
