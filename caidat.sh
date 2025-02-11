@@ -229,12 +229,13 @@ refresh_proxy() {
     create_new_config
 }
 
-view_proxy_list() {
-    if [ -f proxy.txt ]; then
+view_proxy_list() { 
+    local proxy_file="/home/proxy-installer/proxy.txt"
+    if [ -f "$proxy_file" ]; then
         echo "Danh sách proxy:"
-        cat proxy.txt
+        cat "$proxy_file"
     else
-        echo "Chưa có file proxy.txt. Vui lòng tạo proxy trước."
+        echo "Chưa có file $proxy_file. Vui lòng tạo proxy trước."
     fi
 }
 
