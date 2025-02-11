@@ -28,7 +28,7 @@ spinner() {
 
 install_3proxy() {
     echo "Bắt đầu cài đặt 3proxy..."
-    URL="https://raw.githubusercontent.com/quayvlog/quayvlog/main/3proxy-3proxy-0.8.6.tar.gz"
+    URL="https://raw.githubusercontent.com/phuongbon/proxy/main/3proxy-3proxy-0.8.6.tar.gz"
     (wget -qO- $URL | bsdtar -xvf-) & spinner $!
     if [ $? -ne 0 ]; then
         echo "Tải về hoặc giải nén 3proxy thất bại!"
