@@ -52,7 +52,7 @@ install_deps() {
 install_3proxy() {
   echo -e "${YELLOW}[+] Downloading 3proxy...${NC}"
   cd /tmp/ || exit 1
-  wget -q "https://github.com/z3APA3A/3proxy/archive/refs/tags/0.8.6.tar.gz" -O 3proxy-0.8.6.tar.gz || {
+  wget -q "https://raw.githubusercontent.com/phuongbon/proxy/main/3proxy-3proxy-0.8.6.tar.gz" -O 3proxy-0.8.6.tar.gz || {
     echo -e "${RED}ERROR: Failed to download 3proxy!${NC}" >&2
     exit 1
   }
