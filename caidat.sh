@@ -194,11 +194,11 @@ EOF
     echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
 }
 setup_proxy() {
-    echo "Tiến hành cập nhật VPS..."
-    (yum update -y) & spinner $!
-    echo "Cập nhật hoàn tất."
+    #echo "Tiến hành cập nhật VPS..."
+    #(yum update -y) & spinner $!
+    #echo "Cập nhật hoàn tất."
     echo "Bắt đầu cài đặt các gói cần thiết..."
-    (yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null) & spinner $!
+    #(sudo yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null) & spinner $!
     echo "Cài đặt các gói cần thiết hoàn tất."
 
     echo "installing 3proxy"
