@@ -1,4 +1,5 @@
 #!/bin/sh
+
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
     echo
@@ -62,29 +63,31 @@ timeouts 1 5 30 60 180 1800 15 60
 setgid 65535
 setuid 65535
 flush
-auth strong
-
 users $(awk -F "/" 'BEGIN{ORS="";} {print $1 ":CL:" $2 " "}' ${WORKDATA})
 
-$(awk -F "/" '{print "auth strong\n" \
-"allow " $1 "\n" \
-"proxy -6 -n -a -p" $4 " -i" $3 " -e" $5 "\n" \
-"flush\n"}' ${WORKDATA})
+$(if [ -n "$BYPASS_IP" ]; then
+    awk -F "/" '{print "auth strong\n" \
+    "allow " $1 "\n" \
+    "auth none\n" \
+    "allow " "'$BYPASS_IP'" "\n" \
+    "proxy -6 -n -a -p" $4 " -i" $3 " -e" $5 "\n" \
+    "flush\n"}' ${WORKDATA}
+else
+    awk -F "/" '{print "auth strong\n" \
+    "allow " $1 "\n" \
+    "proxy -6 -n -a -p" $4 " -i" $3 " -e" $5 "\n" \
+    "flush\n"}' ${WORKDATA}
+fi)
 EOF
 }
 
 gen_proxy_file_for_user() {
-    # Kiểm tra xem WORKDATA có tồn tại không
     if [ ! -f "${WORKDATA}" ]; then
         echo "Không tìm thấy tệp dữ liệu: ${WORKDATA}. Vui lòng kiểm tra lại!"
         exit 1
     fi
-
-    # Tạo tệp proxy.txt
     echo "Đang tạo file proxy.txt..."
     awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2}' "${WORKDATA}" > proxy.txt
-
-    # Kiểm tra xem file proxy.txt đã được tạo thành công hay chưa
     if [ -f "proxy.txt" ]; then
         echo "Tạo file proxy hoàn tất tại proxy.txt"
     else
@@ -92,7 +95,6 @@ gen_proxy_file_for_user() {
         exit 1
     fi
 }
-
 
 gen_data() {
     seq $FIRST_PORT $LAST_PORT | while read port; do
@@ -102,7 +104,7 @@ gen_data() {
 
 gen_iptables() {
     cat <<EOF
-$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA})
+$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 " -m state --state NEW -j ACCEPT"}' ${WORKDATA})
 EOF
 }
 
@@ -118,57 +120,56 @@ create_new_config() {
     WORKDATA="${WORKDIR}/data.txt"
     mkdir -p "$WORKDIR" && cd "$WORKDIR" || { echo "Không thể tạo hoặc chuyển đến thư mục làm việc!"; exit 1; }
 
-    # Lấy IP4 và subnet IP6
     IP4=$(curl -4 -s icanhazip.com)
     IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
-
     echo "Địa chỉ IP4 nội bộ: ${IP4}"
     echo "Địa chỉ subnet IP6: ${IP6}"
 
     echo "Bạn muốn tạo bao nhiêu proxy? Ví dụ: 500"
     read COUNT
 
-    FIRST_PORT=10000
-    LAST_PORT=$(($FIRST_PORT + $COUNT))
+    echo "Nhập địa chỉ IP để bỏ qua xác thực (ví dụ: 171.251.232.13). Nhấn Enter để bỏ qua:"
+    read BYPASS_IP
+    if [ -n "$BYPASS_IP" ]; then
+        if ! echo "$BYPASS_IP" | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' >/dev/null; then
+            echo "Địa chỉ IP không hợp lệ! Vui lòng nhập đúng định dạng IPv4 (ví dụ: 171.251.232.13)."
+            exit 1
+        fi
+        echo "Sẽ sử dụng auth none và allow $BYPASS_IP cho cấu hình proxy."
+    else
+        echo "Không có IP được cung cấp. Sử dụng xác thực người dùng (auth strong)."
+    fi
 
-    # Kiểm tra và xóa dữ liệu cũ nếu tồn tại
     echo "Kiểm tra dữ liệu cũ..."
-    # Xóa dữ liệu cũ
     if [ -f "$WORKDATA" ]; then
         rm -f "$WORKDATA" && echo "Đã xóa dữ liệu cũ: $WORKDATA." || echo "Không thể xóa dữ liệu cũ: $WORKDATA. Vui lòng kiểm tra quyền."
     fi
-    
     if [ -f "${WORKDIR}/boot_iptables.sh" ]; then
         rm -f "${WORKDIR}/boot_iptables.sh" && echo "Đã xóa script iptables cũ." || echo "Không thể xóa script iptables cũ. Vui lòng kiểm tra quyền."
     fi
-    
     if [ -f "${WORKDIR}/boot_ifconfig.sh" ]; then
         rm -f "${WORKDIR}/boot_ifconfig.sh" && echo "Đã xóa script cấu hình IPv6 cũ." || echo "Không thể xóa script cấu hình IPv6 cũ. Vui lòng kiểm tra quyền."
     fi
-    # Tạo dữ liệu proxy
+
     echo "Đang tạo dữ liệu proxy..."
     gen_data >"$WORKDATA"
     echo "Tạo dữ liệu proxy hoàn tất."
 
-    # Tạo script iptables
     echo "Tạo script iptables..."
     gen_iptables >"${WORKDIR}/boot_iptables.sh"
     echo "Tạo script iptables hoàn tất."
 
-    # Tạo script cấu hình IPv6
     echo "Tạo script cấu hình mạng IPv6..."
     gen_ifconfig >"${WORKDIR}/boot_ifconfig.sh"
     echo "Tạo script cấu hình IPv6 hoàn tất."
 
     chmod +x ${WORKDIR}/boot_*.sh /etc/rc.local
 
-    # Tạo file cấu hình 3proxy
     echo "Kiểm tra và tạo lại file cấu hình 3proxy..."
     [ -f "/usr/local/etc/3proxy/3proxy.cfg" ] && rm -f "/usr/local/etc/3proxy/3proxy.cfg"
     gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
     echo "Tạo file cấu hình 3proxy hoàn tất."
 
-    # Kiểm tra và thêm vào /etc/rc.local nếu chưa có
     echo "Cập nhật /etc/rc.local để tự động khởi động proxy..."
     if ! grep -q "${WORKDIR}/boot_iptables.sh" /etc/rc.local; then
         cat >>/etc/rc.local <<EOF
@@ -182,20 +183,18 @@ EOF
         echo "Các lệnh đã tồn tại trong /etc/rc.local. Không cần cập nhật."
     fi
 
-    # Khởi chạy /etc/rc.local
     echo "Khởi chạy /etc/rc.local để áp dụng cấu hình ngay..."
     bash /etc/rc.local
 
-    # Tạo file proxy cho người dùng
     echo "Tạo file proxy cho người dùng..."
     gen_proxy_file_for_user
     echo "Tạo file proxy hoàn tất tại proxy.txt"
 
     echo "Quá trình hoàn tất. Bạn có thể xem file proxy.txt để biết thông tin proxy."
 }
+
 setup_proxy() {
     echo "Tiến hành cập nhật VPS..."
-    #(yum update -y) & spinner $!
     echo "Cập nhật hoàn tất."
     echo "Bắt đầu cài đặt các gói cần thiết..."
     (sudo yum -y install gcc net-tools bsdtar zip curl wget nano make gcc-c++ glibc glibc-devel >/dev/null) & spinner $!
@@ -214,18 +213,15 @@ refresh_proxy() {
 
     stop_proxy
 
-    # Xóa các địa chỉ IPv6 đã gán
     if [ -f "$WORKDATA" ]; then
         awk -F "/" '{print $5}' "$WORKDATA" | while read ip6; do
             ifconfig eth0 inet6 del "$ip6/64" 2>/dev/null
         done
     fi
 
-    # Xóa dữ liệu và cấu hình cũ
     rm -rf "$WORKDIR"
     rm -f /usr/local/etc/3proxy/3proxy.cfg
 
-    # Thiết lập cấu hình proxy mới và khởi động lại proxy
     create_new_config
 }
 
@@ -242,19 +238,16 @@ view_proxy_list() {
 stop_proxy() {
     echo "Đang tắt tất cả dịch vụ liên quan đến 3proxy..."
 
-    # Dừng dịch vụ thông qua systemctl nếu có
     if systemctl list-units --type=service | grep -q "3proxy"; then
         systemctl stop 3proxy && echo "Dịch vụ 3proxy đã dừng thông qua systemctl." || echo "Không thể dừng dịch vụ 3proxy thông qua systemctl."
     else
         echo "Không tìm thấy dịch vụ 3proxy trong systemctl."
     fi
 
-    # Dừng dịch vụ thông qua service nếu có
     if service --status-all 2>/dev/null | grep -q "3proxy"; then
         service 3proxy stop && echo "Dịch vụ 3proxy đã dừng thông qua service." || echo "Không thể dừng dịch vụ 3proxy thông qua service."
     fi
 
-    # Kiểm tra và kết thúc tiến trình 3proxy đang chạy
     PIDS=$(pgrep 3proxy)
     if [ -n "$PIDS" ]; then
         echo "Đang kết thúc các tiến trình 3proxy..."
@@ -266,25 +259,21 @@ stop_proxy() {
     echo "Đã hoàn tất việc dừng tất cả dịch vụ liên quan đến 3proxy."
 }
 
-
 start_proxy() {
     echo "Đang khởi động proxy..."
 
-    # Khởi động dịch vụ 3proxy bằng systemctl nếu có
     if systemctl list-units --type=service | grep -q "3proxy"; then
         systemctl start 3proxy && echo "Dịch vụ 3proxy đã được khởi động qua systemctl." || echo "Không thể khởi động dịch vụ 3proxy qua systemctl."
     else
         echo "Không tìm thấy dịch vụ 3proxy trong systemctl. Đang thử với service..."
     fi
 
-    # Khởi động dịch vụ 3proxy bằng service nếu có
     if service --status-all 2>/dev/null | grep -q "3proxy"; then
         service 3proxy start && echo "Dịch vụ 3proxy đã được khởi động qua service." || echo "Không thể khởi động dịch vụ 3proxy qua service."
     else
         echo "Không tìm thấy dịch vụ 3proxy trong service. Đang kiểm tra tiến trình 3proxy..."
     fi
 
-    # Kiểm tra tiến trình 3proxy có đang chạy hay không
     if pgrep 3proxy > /dev/null; then
         echo "3proxy đang chạy thành công."
     else
@@ -294,7 +283,6 @@ start_proxy() {
 
     echo "Quá trình khởi động proxy hoàn tất."
 }
-
 
 menu() {
     while true; do
@@ -331,20 +319,16 @@ if [ "$1" = "menu" ] || [ "$1" = "star" ]; then
 else
     setup_proxy
 
-    # Xác định thư mục gốc của script hiện tại
     SCRIPT_SRC="/root/caidat.sh"
     SCRIPT_DEST="/usr/local/bin/caidat.sh"
 
-    # Kiểm tra xem file caidat.sh có tồn tại trong thư mục gốc cài đặt không
     if [ ! -f "$SCRIPT_SRC" ]; then
         echo "File 'caidat.sh' không tồn tại trong thư mục cài đặt"
         exit 1
     fi
 
-    # Sao chép script đến vị trí cố định và thiết lập quyền thực thi
     sudo install -m 755 "$SCRIPT_SRC" "$SCRIPT_DEST"
 
-    # Tự động thêm alias 'menu' vào ~/.bashrc nếu chưa tồn tại, sử dụng đường dẫn tĩnh
     alias_line="alias menu='bash $SCRIPT_DEST menu'"
     if ! grep -qxF "$alias_line" "$HOME/.bashrc"; then
         echo "$alias_line" >> "$HOME/.bashrc"
